@@ -5,7 +5,7 @@ Act: Protecting LLM Agents Against Tool Description Poisoning via Isolated
 Planning"**. This implementation is built on top of
 [AgentDojo](https://github.com/ethz-spylab/agentdojo).
 
-Throughout this README, **TDP** refers to **Cross-Tool Description Poisoning** —
+Throughout this README, TDP refers to Cross-Tool Description Poisoning —
 where an adversary tampers with tool descriptions visible to the LLM agent so that the agent is tricked into invoking malicious tool
 calls. The baseline TDP attack used everywhere is in `src/agentdojo/attacks/tool_description_poisoning.py`.
 
