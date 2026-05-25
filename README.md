@@ -18,8 +18,7 @@ The repository is organised around three reproducible experiments:
 | 3 | Tool Guard vs **adaptive attacks** (alignment / suspicion / combined / PAIR / TAP) | `examples/evaluate_split_replan_defense.py --adaptive-type ...` |
 
 Reference numbers live under `results/`, split into the same three tracks
-(`results/models/`, `results/multi_defense/`, `results/adaptive_pair_tap/`,
-`results/adaptive_alignment_suspicion/`).
+(`results/models/`, `results/multi_defense/`, `results/adaptive_pair_tap/`, `results/adaptive_alignment_suspicion/`).
 
 ---
 
