@@ -12,6 +12,10 @@ from agentdojo.agent_pipeline.llms.prompting_llm import BasePromptingLLM, Prompt
 from agentdojo.agent_pipeline.pi_detector import PromptInjectionDetector, TransformersBasedPIDetector
 from agentdojo.agent_pipeline.planner import ToolSelector, ToolUsagePlanner
 from agentdojo.agent_pipeline.tool_execution import ToolsExecutionLoop, ToolsExecutor
+from agentdojo.agent_pipeline.tool_description_defense import (
+    ToolDescriptionDefense,
+    create_tool_description_defense,
+)
 from agentdojo.agent_pipeline.split_replan_defense import (
     SplitReplanDefense,
     SplitReplanToolsExecutionLoop,
@@ -30,30 +34,23 @@ __all__ = [
     "AbortAgentError",
     "AgentPipeline",
     "AnthropicLLM",
-    "AnthropicValidatorClient",
     "BasePipelineElement",
     "BasePromptingLLM",
     "CohereLLM",
     "GoogleLLM",
-    "GoogleValidatorClient",
     "GroundTruthPipeline",
     "InitQuery",
     "LocalLLM",
     "OpenAILLM",
     "OpenAILLMToolFilter",
-    "OpenAIValidatorClient",
     "PipelineConfig",
     "PromptInjectionDetector",
     "PromptingLLM",
-    "ServerIsolationDefense",
-    "ServerIsolationToolsExecutionLoop",
-    "ServerIsolationValidator",
     "SplitReplanDefense",
     "SplitReplanToolsExecutionLoop",
     "SystemMessage",
     "ToolSelector",
     "ToolDescriptionDefense",
-    "ToolServerMapper",
     "ToolUsagePlanner",
     "ToolsExecutionLoop",
     "ToolsExecutor",
@@ -66,7 +63,4 @@ __all__ = [
     "create_tracked_openai_client",
     "create_tracked_anthropic_client",
     "create_tracked_google_client",
-    "ValidatorClient",
-    "create_default_server_mapper_for_suite",
-    "create_validator_client",
 ]

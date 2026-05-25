@@ -29,6 +29,10 @@ from agentdojo.base_tasks import BaseInjectionTask, BaseUserTask
 from agentdojo.functions_runtime import EmptyEnv, Env, Function, FunctionsRuntime
 from agentdojo.task_suite.task_suite import TaskSuite
 from agentdojo.types import ChatMessage
+from agentdojo.attacks.adaptive_description_optimizers import (
+    pair_optimize_description,
+    tap_optimize_description,
+)
 
 
 class ToolDescriptionPoisoner:
@@ -387,12 +391,37 @@ def combined_adaptive_strategy(tool: Function, injection_goal: str, all_poisoned
     )
 
 
+def pair_adaptive_strategy(tool: Function, injection_goal: str, all_poisoned_tools: list[str] = None) -> str:
+    """
+    PAIR-style adaptive strategy.
+
+    Starts from authority injection text, then iteratively rewrites the description
+    against the defense validator prompts for up to ADAPTIVE_OPT_MAX_ITERS (default: 20).
+    """
+    base = authority_injection_strategy(tool, injection_goal, all_poisoned_tools)
+    return pair_optimize_description(base, tool.name, injection_goal)
+
+
+def tap_adaptive_strategy(tool: Function, injection_goal: str, all_poisoned_tools: list[str] = None) -> str:
+    """
+    TAP-style adaptive strategy.
+
+    Starts from authority injection text, then performs branching/pruning style
+    optimization against defense validator prompts for up to ADAPTIVE_OPT_MAX_ITERS
+    (default: 20).
+    """
+    base = authority_injection_strategy(tool, injection_goal, all_poisoned_tools)
+    return tap_optimize_description(base, tool.name, injection_goal)
+
+
 # Alias for backward compatibility and ProGent
 adaptive_split_replan_strategy = combined_adaptive_strategy
 adaptive_authority_strategy = combined_adaptive_strategy  # Alias for ProGent
 adaptive_append_strategy = combined_adaptive_strategy  # Alias for ProGent
 adaptive_subtle_strategy = combined_adaptive_strategy  # Alias for ProGent
 adaptive_prepend_strategy = combined_adaptive_strategy  # Alias for ProGent
+pair_optimized_strategy = pair_adaptive_strategy
+tap_optimized_strategy = tap_adaptive_strategy
 
 
 def _extract_malicious_id(injection_goal: str) -> str:
@@ -575,6 +604,26 @@ class CombinedAdaptiveAttack(ToolDescriptionPoisoningAttack):
     """
     name = "combined_adaptive"
     poisoning_strategy = combined_adaptive_strategy
+
+
+@register_attack
+class PairAdaptiveAttack(ToolDescriptionPoisoningAttack):
+    """
+    PAIR-style adaptive TDP attack that optimizes poisoned descriptions
+    before they are used in evaluation.
+    """
+    name = "pair_adaptive"
+    poisoning_strategy = pair_adaptive_strategy
+
+
+@register_attack
+class TapAdaptiveAttack(ToolDescriptionPoisoningAttack):
+    """
+    TAP-style adaptive TDP attack that optimizes poisoned descriptions
+    before they are used in evaluation.
+    """
+    name = "tap_adaptive"
+    poisoning_strategy = tap_adaptive_strategy
 
 
 # Backward compatibility alias

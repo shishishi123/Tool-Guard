@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass, field
 from typing import Sequence
 
@@ -158,6 +159,7 @@ class TaskResult:
     benign_prompt_tokens: int = 0
     benign_completion_tokens: int = 0
     benign_total_tokens: int = 0
+    benign_latency_s: float = 0.0
     benign_error: str = None
     # Attack + Defense
     attack_utility: bool = False
@@ -165,7 +167,9 @@ class TaskResult:
     attack_prompt_tokens: int = 0
     attack_completion_tokens: int = 0
     attack_total_tokens: int = 0
+    attack_latency_s: float = 0.0
     attack_error: str = None
+    total_task_latency_s: float = 0.0
 
 
 @dataclass
@@ -180,12 +184,15 @@ class EvaluationResults:
     benign_total_prompt_tokens: int = 0
     benign_total_completion_tokens: int = 0
     benign_total_tokens: int = 0
+    benign_total_latency_s: float = 0.0
     # Attack + Defense
     attack_utility_count: int = 0
     attack_success_count: int = 0  # ASR: attacks that succeeded
     attack_total_prompt_tokens: int = 0
     attack_total_completion_tokens: int = 0
     attack_total_tokens: int = 0
+    attack_total_latency_s: float = 0.0
+    suite_wall_clock_s: float = 0.0
     # Per-task results
     task_results: list = field(default_factory=list)
     
@@ -210,6 +217,14 @@ class EvaluationResults:
     def avg_attack_tokens(self) -> float:
         return self.attack_total_tokens / self.total_tasks if self.total_tasks > 0 else 0.0
     
+    @property
+    def avg_benign_latency_s(self) -> float:
+        return self.benign_total_latency_s / self.total_tasks if self.total_tasks > 0 else 0.0
+    
+    @property
+    def avg_attack_latency_s(self) -> float:
+        return self.attack_total_latency_s / self.total_tasks if self.total_tasks > 0 else 0.0
+    
     def print_summary(self):
         print(f"\n{'='*70}")
         print(f"MULTI-DEFENSE TOKEN TRACKING EVALUATION RESULTS")
@@ -221,6 +236,8 @@ class EvaluationResults:
         print(f"{'-'*70}")
         print(f"\n📊 PASS 1: BENIGN + DEFENSE (No Attack)")
         print(f"   Utility: {self.benign_utility:.1f}% ({self.benign_utility_count}/{self.total_tasks})")
+        print(f"   Latency - Total: {self.benign_total_latency_s:.2f}s")
+        print(f"   Latency - Avg/Task: {self.avg_benign_latency_s:.2f}s")
         print(f"   Tokens - Prompt: {self.benign_total_prompt_tokens:,}")
         print(f"   Tokens - Completion: {self.benign_total_completion_tokens:,}")
         print(f"   Tokens - Total: {self.benign_total_tokens:,}")
@@ -228,10 +245,14 @@ class EvaluationResults:
         print(f"\n⚔️ PASS 2: ATTACK + DEFENSE")
         print(f"   Utility: {self.attack_utility:.1f}% ({self.attack_utility_count}/{self.total_tasks})")
         print(f"   ASR (Attack Success): {self.asr:.1f}% ({self.attack_success_count}/{self.total_tasks})")
+        print(f"   Latency - Total: {self.attack_total_latency_s:.2f}s")
+        print(f"   Latency - Avg/Task: {self.avg_attack_latency_s:.2f}s")
         print(f"   Tokens - Prompt: {self.attack_total_prompt_tokens:,}")
         print(f"   Tokens - Completion: {self.attack_total_completion_tokens:,}")
         print(f"   Tokens - Total: {self.attack_total_tokens:,}")
         print(f"   Avg Tokens/Task: {self.avg_attack_tokens:,.0f}")
+        print(f"\n🕒 WALL CLOCK")
+        print(f"   Suite wall clock: {self.suite_wall_clock_s:.2f}s")
         print(f"{'='*70}")
 
 
@@ -317,10 +338,17 @@ def create_split_replan_pipeline(client, model, suite_name, tracker=None):
         SplitReplanToolsExecutionLoop,
     )
     
+    # SplitReplanDefense uses the client directly for validator calls.
+    # To track tokens for validator calls, wrap the client with the tracker.
+    validator_client = (
+        tracker.wrap_openai_client(client, source="split_replan_validator")
+        if tracker is not None
+        else client
+    )
+
     defense = SplitReplanDefense(
-        client=client,
+        client=validator_client,
         model=model,
-        token_tracker=tracker,
     )
     
     # Main LLM for planning (used by SplitReplanToolsExecutionLoop internally)
@@ -622,9 +650,11 @@ def run_task(pipeline, suite, user_task, tracker, injection_task=None, debug=Fal
         "prompt_tokens": 0,
         "completion_tokens": 0,
         "total_tokens": 0,
+        "latency_s": 0.0,
         "error": None,
     }
     
+    task_start = time.perf_counter()
     try:
         # Reset tracker for this task
         tracker.reset()
@@ -711,6 +741,8 @@ def run_task(pipeline, suite, user_task, tracker, injection_task=None, debug=Fal
         result["error"] = error_str[:200]
         if debug:
             print(f"      DEBUG {label}: Error - {error_str[:80]}")
+    finally:
+        result["latency_s"] = time.perf_counter() - task_start
     
     return result
 
@@ -811,6 +843,7 @@ def run_evaluation(
         print(f"{'='*70}")
     
     # Results
+    eval_start = time.perf_counter()
     results = EvaluationResults(model=model, suite=suite_name, defense=defense_name)
     injection_task = TDPInjectionTask(goal=injection_goal)
     
@@ -861,10 +894,15 @@ def run_evaluation(
         task_result.benign_prompt_tokens = benign_result["prompt_tokens"]
         task_result.benign_completion_tokens = benign_result["completion_tokens"]
         task_result.benign_total_tokens = benign_result["total_tokens"]
+        task_result.benign_latency_s = benign_result["latency_s"]
         task_result.benign_error = benign_result["error"]
         
         if verbose:
-            print(f"      Utility: {benign_result['utility']}, Tokens: {benign_result['total_tokens']:,}")
+            print(
+                f"      Utility: {benign_result['utility']}, "
+                f"Latency: {benign_result['latency_s']:.2f}s, "
+                f"Tokens: {benign_result['total_tokens']:,}"
+            )
         
         # Pass 2: Attack + Defense
         # Recreate pipeline again for clean state
@@ -910,12 +948,17 @@ def run_evaluation(
         task_result.attack_prompt_tokens = attack_result["prompt_tokens"]
         task_result.attack_completion_tokens = attack_result["completion_tokens"]
         task_result.attack_total_tokens = attack_result["total_tokens"]
+        task_result.attack_latency_s = attack_result["latency_s"]
         task_result.attack_error = attack_result["error"]
+        task_result.total_task_latency_s = task_result.benign_latency_s + task_result.attack_latency_s
         
         asr_status = "✅ BLOCKED" if attack_result["security"] else "❌ ATTACK SUCCEEDED"
         if verbose:
-            print(f"      Utility: {attack_result['utility']}, Security: {asr_status}, "
-                  f"Tokens: {attack_result['total_tokens']:,}")
+            print(
+                f"      Utility: {attack_result['utility']}, Security: {asr_status}, "
+                f"Latency: {attack_result['latency_s']:.2f}s, "
+                f"Tokens: {attack_result['total_tokens']:,}"
+            )
         
         # Aggregate
         results.total_tasks += 1
@@ -924,6 +967,7 @@ def run_evaluation(
         results.benign_total_prompt_tokens += task_result.benign_prompt_tokens
         results.benign_total_completion_tokens += task_result.benign_completion_tokens
         results.benign_total_tokens += task_result.benign_total_tokens
+        results.benign_total_latency_s += task_result.benign_latency_s
         
         if task_result.attack_utility:
             results.attack_utility_count += 1
@@ -932,9 +976,11 @@ def run_evaluation(
         results.attack_total_prompt_tokens += task_result.attack_prompt_tokens
         results.attack_total_completion_tokens += task_result.attack_completion_tokens
         results.attack_total_tokens += task_result.attack_total_tokens
+        results.attack_total_latency_s += task_result.attack_latency_s
         
         results.task_results.append(task_result)
     
+    results.suite_wall_clock_s = time.perf_counter() - eval_start
     results.print_summary()
     return results
 
@@ -1019,12 +1065,17 @@ Supported Defenses:
             "defense": results.defense,
             "total_tasks": results.total_tasks,
             "benign_utility": results.benign_utility,
+            "benign_total_latency_s": results.benign_total_latency_s,
+            "benign_avg_latency_s": results.avg_benign_latency_s,
             "benign_total_tokens": results.benign_total_tokens,
             "benign_avg_tokens": results.avg_benign_tokens,
             "attack_utility": results.attack_utility,
             "asr": results.asr,
+            "attack_total_latency_s": results.attack_total_latency_s,
+            "attack_avg_latency_s": results.avg_attack_latency_s,
             "attack_total_tokens": results.attack_total_tokens,
             "attack_avg_tokens": results.avg_attack_tokens,
+            "suite_wall_clock_s": results.suite_wall_clock_s,
         }
         os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
         with open(args.output, "w") as f:
