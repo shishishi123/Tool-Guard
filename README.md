@@ -5,11 +5,9 @@ Act: Protecting LLM Agents Against Tool Description Poisoning via Isolated
 Planning"**. This implementation is built on top of
 [AgentDojo](https://github.com/ethz-spylab/agentdojo).
 
-Throughout this README, **TDP** refers to **Tool Description Poisoning** —
-the attack class where an adversary tampers with tool descriptions visible
-to the LLM agent so that the agent is tricked into invoking malicious tool
-calls. The baseline TDP attack used everywhere is the authority-injection
-strategy in `src/agentdojo/attacks/tool_description_poisoning.py`.
+Throughout this README, **TDP** refers to **Cross-Tool Description Poisoning** —
+where an adversary tampers with tool descriptions visible to the LLM agent so that the agent is tricked into invoking malicious tool
+calls. The baseline TDP attack used everywhere is in `src/agentdojo/attacks/tool_description_poisoning.py`.
 
 The repository is organised around three reproducible experiments:
 
@@ -130,8 +128,7 @@ tool_guard/
 ## 3. Reproducing the experiments
 
 All three experiments share the same TDP attack
-(`authority_injection_strategy` in
-`src/agentdojo/attacks/tool_description_poisoning.py`) and the same
+(`src/agentdojo/attacks/tool_description_poisoning.py`) and the same
 Split-Replan / Tool Guard defense
 (`src/agentdojo/agent_pipeline/split_replan_defense.py`). Only the model,
 the defense, or the attack strategy changes between experiments.
