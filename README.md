@@ -140,6 +140,13 @@ the defense, or the attack strategy changes between experiments.
 > add any extra flag — defense overhead is captured for every command in
 > this section.
 
+> **All three experiments run under `nohup`.** Every example command
+> below is wrapped in `nohup bash -c '...' &` (or `nohup python ... &`
+> for one-shot calls), so the sweep keeps running if you disconnect and
+> stdout / stderr stream to a single `run.log` (or `<job>.log`) you can
+> watch with `tail -f`. Only the Section 1.5 smoke test runs in the
+> foreground because it finishes in a couple of minutes.
+
 ### 3.1 Experiment 1 — Defense effectiveness under different models
 
 Driver: `examples/evaluate_split_replan_defense.py`.
@@ -150,37 +157,46 @@ ASR with and without defense, defense effectiveness, false-positive rate,
 and per-pass latency.
 
 Example sweep over `banking / workspace / slack / travel` with
-`gpt-4o-mini`:
+`gpt-4o-mini` (background):
 
 ```bash
+nohup bash -c '
 for suite in banking workspace slack travel; do
   python examples/evaluate_split_replan_defense.py \
       --provider openai --model gpt-4o-mini \
       --suite $suite --all-tasks \
-      --output results/models/${suite}_gpt4o-mini.json \
-      2>&1 | tee results/models/${suite}_gpt4o-mini.log
+      --output results/models/${suite}_gpt4o-mini.json
 done
+' > results/models/run_gpt4o-mini.log 2>&1 &
+echo "Experiment 1 gpt-4o-mini PID=$!"
+# tail -f results/models/run_gpt4o-mini.log
 ```
 
 To reproduce the cross-model numbers we report (`gpt-4o`, `gpt-4o-mini`,
 `claude-3-5-haiku-20241022`, `gemini-2.5-flash`, `gemini-2.5-pro`), swap
-the `--provider` / `--model` flags:
+the `--provider` / `--model` flags. Each model also runs under `nohup`:
 
 ```bash
 # OpenAI gpt-4o
-python examples/evaluate_split_replan_defense.py \
+nohup python examples/evaluate_split_replan_defense.py \
     --provider openai --model gpt-4o --suite banking --all-tasks \
-    --output results/models/banking_gpt4o.json
+    --output results/models/banking_gpt4o.json \
+    > results/models/banking_gpt4o.log 2>&1 &
+echo "gpt-4o banking PID=$!"
 
 # Anthropic Claude 3.5 Haiku
-python examples/evaluate_split_replan_defense.py \
+nohup python examples/evaluate_split_replan_defense.py \
     --provider anthropic --model claude-3-5-haiku-20241022 --suite banking --all-tasks \
-    --output results/models/banking_claude35haiku.json
+    --output results/models/banking_claude35haiku.json \
+    > results/models/banking_claude35haiku.log 2>&1 &
+echo "claude35haiku banking PID=$!"
 
 # Google Gemini 2.5 Flash
-python examples/evaluate_split_replan_defense.py \
+nohup python examples/evaluate_split_replan_defense.py \
     --provider google --model gemini-2.5-flash --suite banking --all-tasks \
-    --output results/models/banking_gemini25flash.json
+    --output results/models/banking_gemini25flash.json \
+    > results/models/banking_gemini25flash.log 2>&1 &
+echo "gemini25flash banking PID=$!"
 ```
 
 Reference JSON / LOG files for every model are already in `results/models/`.
@@ -203,17 +219,20 @@ listed below, varying `--defense`:
 | `progent`       | ProGent / SecAgent policy validation (`secagent/`) |
 | `split_replan`  | Tool Guard (this work, for comparison)           |
 
-Full sweep on `gpt-4o`:
+Full sweep on `gpt-4o` (background):
 
 ```bash
+nohup bash -c '
 for defense in none tool_filter repeat_prompt drift progent split_replan; do
   for suite in banking workspace slack travel; do
     python examples/evaluate_multi_defense_tokens.py \
         --defense $defense --model gpt-4o --suite $suite --all-tasks \
-        --output results/multi_defense/${defense}_${suite}_gpt4o.json \
-        2>&1 | tee results/multi_defense/${defense}_${suite}_gpt4o.log
+        --output results/multi_defense/${defense}_${suite}_gpt4o.json
   done
 done
+' > results/multi_defense/run.log 2>&1 &
+echo "Experiment 2 PID=$!"
+# tail -f results/multi_defense/run.log
 ```
 
 The reference numbers we shipped under `results/multi_defense/` are
@@ -236,16 +255,24 @@ Driver: still `examples/evaluate_split_replan_defense.py`, but with
 | `pair`            | PAIR-style optimisation against validator prompts       | `pair_adaptive_strategy` → `adaptive_description_optimizers.pair_optimize_description` |
 | `tap`             | TAP-style tree-of-attack optimisation                   | `tap_adaptive_strategy` → `adaptive_description_optimizers.tap_optimize_description`   |
 
-> **We strongly recommend running Experiment 3 under `nohup`.** PAIR and
-> TAP call the optimiser model many times per user task, so a full sweep
-> over all four suites can take **several hours**. Wrapping each sweep in
-> `nohup ... &` lets it survive shell disconnects and writes a single
-> log file you can `tail -f`. Per-pass latency, token counts, and (for
-> PAIR / TAP) per-iteration optimiser records are still saved to the
-> output JSON / JSONL files as the run progresses.
+> Experiment 3 always uses `gpt-4o-mini`; no other model is needed.
+> Reference numbers for **every** adaptive attack on **every** suite are
+> already shipped under `results/adaptive_alignment_suspicion/` and
+> `results/adaptive_pair_tap/` (including the per-iteration optimiser
+> log `adaptive_optimization_records.jsonl`). If you only need the
+> headline numbers, you can skip the commands below and read those files
+> directly.
 
-Reproduce the full results in `results/adaptive_alignment_suspicion/` and
-`results/adaptive_pair_tap/`:
+> **PAIR / TAP are the longest jobs in the repo.** On our reference
+> machine the full four-suite sweep took **~2.4 h for PAIR** and
+> **~7.7 h for TAP** (`latency_stats.suite_run_total_s` in each output
+> JSON), while alignment / suspicion / combined finished in a few
+> minutes per suite. Per-pass latency and per-iteration optimiser
+> records are saved to the output JSON / JSONL files as the run
+> progresses, so you can monitor partial results before the sweep
+> finishes.
+
+To reproduce, launch the two `nohup` sweeps:
 
 ```bash
 # Alignment / suspicion / combined adaptive attacks (run in background)
@@ -325,17 +352,28 @@ during our reference runs. Use them for planning, not invoicing.
 | **Experiment 1** — full cross-model table (all five models)                       | mixed                                  | $100 – $250        |
 | **Experiment 2** — one defense, all four suites                                   | `gpt-4o`                               | $20 – $50          |
 | **Experiment 2** — all six defenses, all four suites                              | `gpt-4o`                               | $150 – $300        |
-| **Experiment 3** — alignment / suspicion / combined, all four suites              | `gpt-4o-mini`                          | $5 – $15           |
-| **Experiment 3** — PAIR *or* TAP, all four suites (20 optimisation iters)         | `gpt-4o-mini`                          | $30 – $100 each    |
+| **Experiment 3** — alignment / suspicion / combined, all four suites              | `gpt-4o-mini`                          | $1 – $3            |
+| **Experiment 3** — PAIR, all four suites (20 optimisation iters)                  | `gpt-4o-mini`                          | $2 – $7            |
+| **Experiment 3** — TAP, all four suites (20 optimisation iters)                   | `gpt-4o-mini`                          | $5 – $15           |
+
+Experiment 3 uses `gpt-4o-mini` exclusively, so its actual spend is far
+lower than the cross-model Experiment 1 / 2 rows above. The PAIR / TAP
+estimates are anchored on the observed wall-times in our shipped runs
+(`latency_stats.suite_run_total_s` ≈ 2.4 h for the full PAIR sweep and
+≈ 7.7 h for the full TAP sweep at `ADAPTIVE_OPT_MAX_ITERS=20`); the
+optimiser averaged 17–18 of the 20 allowed iterations per tool.
 
 If you want representative numbers on a tighter budget:
 
 * Pass `--num-tasks 5` instead of `--all-tasks` to run only the first few
   user tasks per suite.
 * For Experiment 3, lower `ADAPTIVE_OPT_MAX_ITERS` (e.g. `5`) to cap the
-  PAIR / TAP optimiser early.
+  PAIR / TAP optimiser early — wall time scales roughly linearly with
+  this value.
 * Drop the `--provider anthropic` / `--provider google` rows of
   Experiment 1 if you only need the OpenAI numbers.
+* Skip Experiment 3 entirely — every adaptive-attack result is already
+  shipped in `results/adaptive_*` so you can just inspect those files.
 
 ---
 
