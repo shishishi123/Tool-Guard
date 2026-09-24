@@ -23,7 +23,7 @@ Reference numbers are under `results/models/`, `results/multi_defense/`,
 
 ## Setup
 
-Python 3.10+ (3.12 used here), then:
+Python 3.10+, then:
 
 ```bash
 conda create -n tool_guard python=3.10 -y && conda activate tool_guard
