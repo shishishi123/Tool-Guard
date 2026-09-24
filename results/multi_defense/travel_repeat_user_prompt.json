@@ -1,0 +1,19 @@
+{
+  "model": "gpt-4o",
+  "suite": "travel",
+  "strategy": "authority",
+  "defense": "repeat_user_prompt",
+  "total_tasks": 20,
+  "benign_utility": 75.0,
+  "benign_utility_under_defense": 65.0,
+  "utility_under_attack": 30.0,
+  "utility_with_defense": 20.0,
+  "asr": 60.0,
+  "asr_with_defense": 75.0,
+  "benign_utility_count": 15,
+  "benign_utility_under_defense_count": 13,
+  "utility_under_attack_count": 6,
+  "utility_with_defense_count": 4,
+  "asr_count": 12,
+  "asr_with_defense_count": 15
+}

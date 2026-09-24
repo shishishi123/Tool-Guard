@@ -1,0 +1,19 @@
+{
+  "model": "gpt-4o",
+  "suite": "workspace",
+  "strategy": "authority",
+  "defense": "tool_filter",
+  "total_tasks": 40,
+  "benign_utility": 77.5,
+  "benign_utility_under_defense": 57.49999999999999,
+  "utility_under_attack": 55.00000000000001,
+  "utility_with_defense": 45.0,
+  "asr": 5.0,
+  "asr_with_defense": 0.0,
+  "benign_utility_count": 31,
+  "benign_utility_under_defense_count": 23,
+  "utility_under_attack_count": 22,
+  "utility_with_defense_count": 18,
+  "asr_count": 2,
+  "asr_with_defense_count": 0
+}
